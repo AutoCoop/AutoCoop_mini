@@ -1,0 +1,176 @@
+#include <stdio.h>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "freertos/queue.h"
+#include "driver/ledc.h"
+#include "esp_err.h"
+
+#define LIGHT_BTN   13
+#define LIGHT_LED   19
+#define FAN_BTN     32
+#define FAN_PIN     18
+#define DOOR_BTN    26
+#define DHT_PIN     14 
+#define GAS_OUT     34
+#define SERVO_PIN   27
+#define RTC_SDA     21
+#define RTC_SCL     22
+
+// LEDC (PWM) configurations for Servo
+#define LEDC_TIMER      LEDC_TIMER_0
+#define LEDC_MODE       LEDC_LOW_SPEED_MODE
+#define LEDC_CHANNEL    LEDC_CHANNEL_0
+#define LEDC_DUTY_RES   LEDC_TIMER_13_BIT // 13-bit resolution
+#define LEDC_FREQUENCY  50              // 50Hz frequency for servo motor
+
+
+// States tracking
+bool    is_light_on       = false;
+bool    is_fan_on         = false;
+bool    is_door_open      = false;
+float   temperature       = 0.0;
+float   humidity          = 0.0;
+float   gas_level         = 0.0;
+int     hour              = 0;
+int     date_time_ms      = 0;
+
+// 1. Light Function
+void light_on_off(void) {
+    if (is_light_on) {
+        gpio_set_level(LIGHT_LED, 0);
+        is_light_on = false;
+        printf("Light is turned OFF\n");
+    } else {
+        gpio_set_level(LIGHT_LED, 1);
+        is_light_on = true;
+        printf("Light is turned ON\n");
+    }
+}
+
+// 2. Fan Function 
+void fan_on_off(void) {
+    if (is_fan_on) {
+        gpio_set_level(FAN_PIN, 0);
+        is_fan_on = false;
+        printf("Fan is turned OFF\n");
+    } else {
+        gpio_set_level(FAN_PIN, 1);
+        is_fan_on = true;
+        printf("Fan is turned ON\n");
+    }
+}
+
+// 3. Door Function
+void door_open_close(void) {
+    if (is_door_open) {
+        is_door_open = false;
+        printf("Door is CLOSED\n");
+       
+    } else {
+        is_door_open = true;
+        printf("Door is OPENED\n");
+        
+    }
+}
+
+
+// Handle for the semaphore
+SemaphoreHandle_t xButtonSemaphore = NULL;
+
+// --- Helper function to set Servo Angle ---
+// 0 degrees to 180 degrees mapping for typical servo (approx 500us to 2400us pulse width)
+void set_servo_angle(int angle) {
+    // 50Hz period = 20ms = 20000us
+    // 13-bit max duty = 8192 (corresponds to 20ms)
+    // 0 deg -> ~500us -> duty approx 205
+    // 180 deg -> ~2400us -> duty approx 983
+    
+    uint32_t duty = (angle * (983 - 205) / 180) + 205;
+    ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
+    ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
+}
+
+// --- Interrupt Service Routine (ISR) ---
+static void IRAM_ATTR button_isr_handler(void* arg) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xButtonSemaphore, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();
+    }
+}
+
+// --- Event Task ---
+void event_task(void *pvParameters) {
+    if (xButtonSemaphore != NULL) {
+        while (1) {
+            // Semaphore එක ලැබෙනකම් task එක Block වෙලා තියෙනවා (CPU 0%)
+            if (xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdTRUE) {
+                
+                printf("Event Detected! Moving servo to 0 degrees...\n");
+                
+                // // TO-DO: Code for servo angle to 0
+                set_servo_angle(0); 
+                
+                vTaskDelay(pdMS_TO_TICKS(500)); // Delay 500ms
+            }
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+void app_main(void) {
+    // 1. Button GPIO Configuration
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << DOOR_BTN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&io_conf);
+
+    // 2. LEDC (PWM) Configuration for Servo
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode       = LEDC_MODE,
+        .timer_num        = LEDC_TIMER,
+        .duty_resolution  = LEDC_DUTY_RES,
+        .freq_hz          = LEDC_FREQUENCY,
+        .clk_cfg          = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&ledc_timer);
+
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode     = LEDC_MODE,
+        .channel        = LEDC_CHANNEL,
+        .timer_sel      = LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = SERVO_PIN,
+        .duty           = 0, // Initial duty
+        .hpoint         = 0
+    };
+    ledc_channel_config(&ledc_channel);
+
+    // Set initial servo position to 0 degrees
+    set_servo_angle(0);
+
+    // 3. Create Binary Semaphore
+    xButtonSemaphore = xSemaphoreCreateBinary();
+
+    if (xButtonSemaphore != NULL) {
+        // Install GPIO ISR service and add handler
+        gpio_install_isr_service(0);
+        gpio_isr_handler_add(DOOR_BTN, button_isr_handler, NULL);
+
+        // 4. Create FreeRTOS Task
+        xTaskCreatePinnedToCore(
+            event_task,
+            "event_task",
+            2048,
+            NULL,
+            2,
+            NULL,
+            1
+        );
+    }
+}

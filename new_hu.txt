@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_rom_sys.h"
+
+#define DHT_PIN 14 // DHT22 data pin eka connect karala thiyena GPIO pin eka
+
+// DHT22 data read karana function eka
+int read_dht22(float *temperature, float *humidity) {
+    uint8_t data[5] = {0};
+    
+    // 1. Start signal eka yawanawa
+    gpio_set_direction(DHT_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(DHT_PIN, 0);
+    esp_rom_delay_us(1000); // 1ms LOW
+    gpio_set_level(DHT_PIN, 1);
+    esp_rom_delay_us(30);   // 30us HIGH
+    
+    // 2. Input mode ekata maru karala sensor eken response eka balanna
+    gpio_set_direction(DHT_PIN, GPIO_MODE_INPUT);
+    
+    uint32_t timeout = 10000;
+    while (gpio_get_level(DHT_PIN) == 1) {
+        if (--timeout == 0) return -1;
+    }
+    timeout = 10000;
+    while (gpio_get_level(DHT_PIN) == 0) {
+        if (--timeout == 0) return -1;
+    }
+    timeout = 10000;
+    while (gpio_get_level(DHT_PIN) == 1) {
+        if (--timeout == 0) return -1;
+    }
+
+    // 3. Bits 40k read karaganna
+    for (int i = 0; i < 40; i++) {
+        timeout = 10000;
+        while (gpio_get_level(DHT_PIN) == 0) {
+            if (--timeout == 0) return -1;
+        }
+        
+        esp_rom_delay_us(30);
+        
+        if (gpio_get_level(DHT_PIN) == 1) {
+            data[i / 8] |= (1 << (7 - (i % 8)));
+            timeout = 10000;
+            while (gpio_get_level(DHT_PIN) == 1) {
+                if (--timeout == 0) return -1;
+            }
+        }
+    }
+
+    // 4. Checksum verify karanna
+    if (data[4] != ((data[0] + data[1] + data[2] + data[3]) & 0xFF)) {
+        return -2;
+    }
+
+    // 5. Values calculate karanna
+    *humidity = ((data[0] << 8) + data[1]) * 0.1;
+    
+    int16_t raw_temp = ((data[2] & 0x7F) << 8) + data[3];
+    *temperature = raw_temp * 0.1;
+    if (data[2] & 0x80) {
+        *temperature = -(*temperature);
+    }
+
+    return 0;
+}
+
+// DHT Task - Hama tapparayakma dekakata parak run wenawa
+void dht_task(void *pvParameters) {
+    float temperature = 0, humidity = 0;
+    
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << DHT_PIN),
+        .mode = GPIO_MODE_INPUT_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io_conf);
+
+    for (;;) {
+        int result = read_dht22(&temperature, &humidity);
+        if (result == 0) {
+            printf("Humidity: %.1f%%, Temp: %.1f°C\n", humidity, temperature);
+        } else {
+            printf("Failed to read from DHT22! Error code: %d\n", result);
+        }
+        
+        // Exactly seconds 2k (2000 milliseconds) delay ekak
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+void app_main(void) {
+    // Anith task/buttons walata amatharawa DHT task eka create karanna
+    xTaskCreate(dht_task, "dht_task", 2048, NULL, 5, NULL);
+    
+    printf("System Started\n");
+}
