@@ -7,6 +7,37 @@
 #include "driver/ledc.h"
 #include "esp_rom_sys.h"
 #include "esp_log.h"
+// Food ultrasound sensor threshold
+#define ULTRASOUND_THRESHOLD 20.0
+
+//Water level sensor threshold
+#define WATER_LEVEL_THRESHOLD 10.0
+
+// Gas sensor threshold
+#define GAS_THRESHOLD 300
+
+// Temperature & Humidity warning threshold
+#define TEMP_THRESHOLD 30.0
+#define HUMIDITY_THRESHOLD 70.0
+
+// Light on time
+#define LIGHT_ON_HOUR 18
+#define LIGHT_ON_MINUTE 0
+#define LIGHT_ON_SECOND 0
+
+// Light off time
+#define LIGHT_OFF_HOUR 18
+#define LIGHT_OFF_MINUTE 0
+#define LIGHT_OFF_SECOND 0
+
+// Door open time
+#define DOOR_OPEN_HOUR 6
+#define DOOR_OPEN_MINUTE 0
+#define DOOR_OPEN_SECOND 0  
+// Door close time
+#define DOOR_CLOSE_HOUR 18
+#define DOOR_CLOSE_MINUTE 0
+#define DOOR_CLOSE_SECOND 0
 
 // Pin Definitions
 #define LIGHT_BTN       13
@@ -15,6 +46,7 @@
 #define FAN_PIN         18
 #define DOOR_BTN        26
 #define DHT_PIN         14
+#define SERVO_PIN       27
 
 // I2C & RTC Definitions
 #define I2C_MASTER_SCL_IO    22
@@ -24,7 +56,7 @@
 #define DS1307_ADDR          0x68
 
 // Servo Definitions
-#define SERVO_PIN            27
+
 #define LEDC_TIMER           LEDC_TIMER_0
 #define LEDC_MODE            LEDC_LOW_SPEED_MODE
 #define LEDC_CHANNEL         LEDC_CHANNEL_0
@@ -152,6 +184,10 @@ static void button_task(void* arg) {
         }
     }
 }
+// TO DO :MQ-138 gas sensor initialization and reading function
+// TODO: Ultrasonic sensor initialization and reading function for food level
+// TODO: Water level sensor initialization and reading function
+
 
 // DHT22 Read Function
 int read_dht22(float *temperature, float *humidity) {
@@ -209,6 +245,14 @@ void dht_task(void *pvParameters) {
     for (;;) {
         if (read_dht22(&temperature, &humidity) == 0) {
             printf("Humidity: %.1f%%, Temp: %.1f°C\n", humidity, temperature);
+            if (temperature > TEMP_THRESHOLD && is_fan_on == false) {
+                printf("Warning: High Temperature!\n");
+                fan_on_off();
+            }
+            if (humidity > HUMIDITY_THRESHOLD && is_fan_on == false) {
+                printf("Warning: High Humidity!\n");
+                fan_on_off();
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
@@ -247,6 +291,20 @@ void rtc_task(void *pvParameters) {
             month = bcd_to_dec(read_buf[5]);
             year  = bcd_to_dec(read_buf[6]) + 2000;
             printf("Time: %02d:%02d:%02d | Date: %02d/%02d/%d\n", hour, min, sec, date, month, year);
+            if (hour == DOOR_OPEN_HOUR && min == DOOR_OPEN_MINUTE && sec == DOOR_OPEN_SECOND && is_door_open == false) {
+                printf("Door is now open!\n");
+                door_open_close();
+            } else if (hour == DOOR_CLOSE_HOUR && min == DOOR_CLOSE_MINUTE && sec == DOOR_CLOSE_SECOND && is_door_open == true) {
+                printf("Door is now closed!\n");
+                door_open_close();
+            }
+            if (hour == LIGHT_ON_HOUR && min == LIGHT_ON_MINUTE && sec == LIGHT_ON_SECOND && is_light_on == false) {
+                printf("Light is now ON!\n");
+                light_on_off();
+            } else if (hour == LIGHT_OFF_HOUR && min == LIGHT_OFF_MINUTE && sec == LIGHT_OFF_SECOND && is_light_on == true) {
+                printf("Light is now OFF!\n");
+                light_on_off();
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
