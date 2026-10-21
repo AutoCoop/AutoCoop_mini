@@ -54,3 +54,87 @@ Existing commercial automation systems target large-scale industrial poultry ope
 ---
 
 ## System Architecture & Flow
++---------------------------------------------------------------------------------+
+|                                AutoCoop Hardware                                |
+|                                                                                 |
+|  +--------------------+   +-------------------+   +-------------------+         |
+|  | DHT22 / DS18B20    |   | MQ-135 Gas Sensor |   | HC-SR04 Sensors   |         |
+|  | Temp & Humidity    |   | Ammonia / AQI     |   | Feed & Water      |         |
+|  +---------+----------+   +---------+---------+   +---------+---------+         |
+|            |                        |                       |           |
+|            +-------------------+    |    +-----------------+            |
+|                                v    v    v                              |
+|                        +------------------------+                       |
+|                        | ESP32 Master Controller|                       |
+|                        | (ESP-IDF v6.1 & NVS)   |                       |
+|                        +-----------+------------+                       |
+|                                    |                                    |
+|        +---------------------------+---------------------------+        |
+|        |                           |                           |        |
+|        v                           v                           v        |
+|  +----+------------------+   +----+------------------+   +----+---+----+  |
+|  | Relay Module (Fans)   |   | Servo Motor (Door)    |   | RTC Light   |  |
+|  +-----------------------+   +-----------------------+   +-------------+|
++------------------------------------|------------------------------------+
+|
+Wi-Fi AP & MQTT Telemetry Stream
+v
++---------------------------------------------------------------------------------+
+|                             Local Edge / Node-RED                               |
+|                                                                                 |
+|                        +---------------------------+                            |
+|                        | Node-RED Dashboard        |                            |
+|                        | (Local Telemetry & UI)    |                            |
+|                        +-------------+-------------+                            |
+|                                      |                                          |
+|                                      v                                          |
+|                        +---------------------------+                            |
+|                        | Mosquitto MQTT Broker     |                            |
+|                        +---------------------------+                            |
++---------------------------------------------------------------------------------+
+
+
+---
+
+## Hardware Pin Mapping & Configuration
+
+| Peripheral / Component | ESP32 Pin | Description / Function |
+| :--- | :--- | :--- |
+| **Light Push-Button** | GPIO 13 | Manual toggle for coop lighting (with debounce filter) |
+| **Light Relay / LED** | GPIO 19 | Controls 12V LED / lighting circuits |
+| **Fan Push-Button** | GPIO 32 | Manual toggle for ventilation fan |
+| **Fan Relay** | GPIO 18 | Controls 12V High-CFM DC ventilation fans |
+| **Door Push-Button** | GPIO 26 | Manual toggle for coop access door |
+| **DHT Sensor** | GPIO 14 | Ambient temperature and humidity monitoring |
+| **Servo Motor** | GPIO 27 | PWM-driven door actuator (LEDC Timer configured at 50Hz) |
+| **MQ-135 Gas Sensor** | GPIO 34 (ADC1 Ch 6) | Air quality and ammonia concentration monitoring |
+| **AP Trigger Button** | GPIO 15 | Press to activate configuration Wi-Fi Access Point |
+| **Food Ultrasonic (Echo/Trig)** | GPIO 25 / GPIO 33 | Measures remaining feed levels |
+| **Water Ultrasonic (Echo/Trig)** | GPIO 4 / GPIO 5 | Measures water reservoir levels |
+| **I2C RTC (DS1307 / DS3231)** | SDA: GPIO 21, SCL: GPIO 22 | Real-Time Clock for automated schedule triggers |
+
+---
+
+## 📊 System Objectives & Project Roadmap
+
+- [x] **Hardware Prototyping:** Design and integrate temperature, humidity, and ammonia gas sensor nodes.
+- [x] **Firmware Development:** Implement robust ESP-IDF v6.1 embedded C++ local threshold control loops and NVS persistence.
+- [x] **Wi-Fi AP & Web Portal:** Set up on-board web server configuration portal for offline parameter tuning.
+- [ ] **MQTT & Node-RED Pipeline:** Configure Mosquitto MQTT broker and Node-RED local dashboard for telemetry and remote control.
+- [ ] **Stress & Field Testing:** Conduct a 7-day operational evaluation in a live small-pen farm environment to assess stability and reliability.
+
+---
+
+## Project Team
+
+**Special Term Team Engineering Project**  
+*Department of Electronic and Telecommunication Engineering*  
+*University of Moratuwa, Sri Lanka*  
+*Date: October, 2026*
+
+| Index No. | Name |
+| :--- | :--- |
+| **250412N** | R. M. Minadith |
+| **250423A** | G. L. B. G. S. Nanayakkara |
+| **250428T** | L. G. H. M. Nawanjana |
+| **250429X** | M. N. Naweed (Project Concept) |
