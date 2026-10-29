@@ -24,7 +24,7 @@
 #include "nvs_flash.h"
 #include "dht22.h"
 
-//static const char *TAG = "AUTOCOOP";
+static const char *TAG = "AUTOCOOP";
 
 /* ------------------------------------------------------------------------------------------------------------- */
 /* Pins & constants  using wokwi diagram but we use waterlevel sensor for water contaner not Ultra sonic one ;)  */
