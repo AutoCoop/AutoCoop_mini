@@ -75,6 +75,53 @@
 #define NVS_NAMESPACE    "storage"
 #define NVS_KEY          "coop_cfg"
  
+/* ------------------------------------------------------------------ */
+/* Live state  struct                                                        */
+/* ------------------------------------------------------------------ */
+static struct {
+    float temperature, humidity, food_cm;
+    int   gas, water_raw;
+    bool  food_low, water_low;
+    bool  light_on, fan_on, door_open;
+} st;
+ 
+
+
+static void servo_set_angle(int angle)
+{
+    if (angle < 0)   angle = 0;
+    if (angle > 180) angle = 180;
+ 
+    uint32_t pulse_us = SERVO_MIN_US + (SERVO_MAX_US - SERVO_MIN_US) * angle / 180;
+    uint32_t duty     = (pulse_us * (1u << SERVO_DUTY_BITS)) / 20000;  /* 20 ms period */
+ 
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+}
+ 
+static void light_set(bool on)
+{
+    st.light_on = on;
+    gpio_set_level(LIGHT_LED, on);
+    ESP_LOGI(TAG, "Light %s", on ? "ON" : "OFF");
+}
+ 
+static void fan_set(bool on)
+{
+    st.fan_on = on;
+    gpio_set_level(FAN_PIN, on);
+    ESP_LOGI(TAG, "Fan %s", on ? "ON" : "OFF");
+}
+ 
+static void door_set(bool open)
+{
+    st.door_open = open;
+    servo_set_angle(open ? DOOR_OPEN_ANGLE : DOOR_CLOSED_ANGLE);
+    ESP_LOGI(TAG, "Door %s", open ? "OPEN" : "CLOSED");
+}
+
+
+
 
 void app_main(void)
 {
