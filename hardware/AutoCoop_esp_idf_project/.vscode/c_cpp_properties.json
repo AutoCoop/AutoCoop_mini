@@ -6,7 +6,7 @@
       "compileCommands": "/home/bimsara/special_term/AutoCoop_mini/hardware/AutoCoop_esp_idf_project/build/compile_commands.json",
       "intelliSenseMode": "linux-gcc-x64",
       "includePath": [
-        "${workspaceFolder}/**"
+        "${workspaceFolder}/**" , "${workspaceFolder}/components/**"
       ],
       "browse": {
         "path": [

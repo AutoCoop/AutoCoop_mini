@@ -32,5 +32,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=/home/bimsara/special_term/AutoCoop_mini/hardware/AutoCoop_esp_idf_project/build"
-  ]
+  ],
+  "idf.flashType": "JTAG"
 }
